@@ -1,0 +1,71 @@
+name: CI
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -m pip install --upgrade pip setuptools
+      - run: python -m pip install -r requirements.txt -r requirements-dev.txt -e .
+      - run: python -m pytest -q
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: bandit -r threatguard ml scripts -ll
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip setuptools
+      - run: python -m pip install -r requirements.txt -r requirements-dev.txt cyclonedx-bom==7.5.0
+      - run: python scripts/install_ci_tools.py
+      - run: echo "$PWD/.tools" >> "$GITHUB_PATH"
+      - name: Audit installed environment including transitive dependencies
+        run: pip-audit --strict
+      - name: Scan secrets including git history
+        run: gitleaks git . --redact=100 --report-format json --report-path /tmp/gitleaks.json
+      - name: Scan infrastructure
+        run: trivy fs --scanners misconfig --severity HIGH,CRITICAL --exit-code 1 .
+      - name: Generate declared-dependency SBOM
+        run: cyclonedx-py requirements requirements.txt --output-format JSON -o /tmp/sbom.cdx.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            /tmp/gitleaks.json
+            /tmp/sbom.cdx.json
+  container:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t academic-project:${{ github.sha }} .
+
+  smoke-training:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip setuptools
+      - run: python -m pip install -r requirements.txt
+      - run: python -m ml.synthetic --output data/synthetic.csv --rows 1200
+      - run: python -m ml.train --train-csv data/synthetic.csv --provenance synthetic --trees 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-evaluation-only
+          path: reports/latest/evaluation.json

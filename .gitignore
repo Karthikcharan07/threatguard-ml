@@ -1,0 +1,22 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.env
+.env.*
+!.env.example
+build/
+dist/
+reports/latest/
+data/*.csv
+models/*/
+models/CURRENT
+*.joblib
+.DS_Store
+.tools/
+
+# Generated audit and test reports
+reports/
