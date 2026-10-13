@@ -40,7 +40,7 @@ jobs:
       - name: Generate declared-dependency SBOM
         run: cyclonedx-py requirements requirements.txt --output-format JSON -o /tmp/sbom.cdx.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: security-reports
@@ -65,7 +65,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: python -m ml.synthetic --output data/synthetic.csv --rows 1200
       - run: python -m ml.train --train-csv data/synthetic.csv --provenance synthetic --trees 30
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: synthetic-evaluation-only
           path: reports/latest/evaluation.json
